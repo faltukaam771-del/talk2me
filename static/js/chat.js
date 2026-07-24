@@ -34,6 +34,7 @@ messagesArea.scrollTop = messagesArea.scrollHeight;
 // we now shift the whole wrapper by exactly that offset so it always
 // lines up with whatever is actually visible — header included.
 let vvRaf = null;
+let vvSettleTimer = null;
 function syncInputAreaToViewport() {
   if (!window.visualViewport || !inputArea || !chatWrapper) return;
   if (vvRaf) cancelAnimationFrame(vvRaf);
@@ -45,9 +46,20 @@ function syncInputAreaToViewport() {
   });
 }
 
+function scheduleViewportSync() {
+  syncInputAreaToViewport(); // apply immediately, keeps it responsive/non-jittery
+  // Chrome/Android can fire several resize events while the keyboard is still
+  // animating open, and an intermediate (wrong, too-small) height can end up
+  // being the last one we saw before things settle. This corrective pass
+  // re-measures once the animation has actually finished, so any transient
+  // bad value gets overwritten with the real final size.
+  clearTimeout(vvSettleTimer);
+  vvSettleTimer = setTimeout(syncInputAreaToViewport, 150);
+}
+
 if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", syncInputAreaToViewport);
-  window.visualViewport.addEventListener("scroll", syncInputAreaToViewport);
+  window.visualViewport.addEventListener("resize", scheduleViewportSync);
+  window.visualViewport.addEventListener("scroll", scheduleViewportSync);
 }
 
 syncInputAreaToViewport();
