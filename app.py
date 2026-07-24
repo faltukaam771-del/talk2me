@@ -4,13 +4,23 @@ app.py
 WhatsApp-style TEXT-ONLY chat web app — SINGLE fixed room.
 """
 
+# MUST be the very first thing that runs — before any other import,
+# including stdlib ssl/socket and anything that pulls in requests/urllib3
+# (google-auth, gspread). GeventWebSocketWorker patches too late on its own,
+# leaving ssl.SSLContext half-patched, which causes:
+#   RecursionError: maximum recursion depth exceeded
+# in ssl.py's minimum_version setter under load.
+from gevent import monkey
+monkey.patch_all()
+
 import os
 import socket
+import secrets
 import threading
 from datetime import datetime as _dt, timezone, timedelta
 
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from flask_socketio import SocketIO, join_room, emit
 from werkzeug.exceptions import HTTPException
 
