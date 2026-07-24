@@ -33,15 +33,9 @@ socket.on("connect", () => {
 
 function formatTime12h(timestampStr) {
   if (!timestampStr) return "";
-  const timePart = timestampStr.includes(" ") ? timestampStr.split(" ")[1] : timestampStr;
-  const bits = timePart.split(":");
-  let hours = parseInt(bits[0], 10);
-  const minutes = bits[1] || "00";
-  if (isNaN(hours)) return timestampStr;
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12;
-  if (hours === 0) hours = 12;
-  return `${hours}:${minutes} ${ampm}`;
+  const [datePart, timePart] = timestampStr.split(" ");
+  const utcDate = new Date(`${datePart}T${timePart}Z`); // treat as UTC
+  return utcDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
 }
 
 function appendMessage(data) {
