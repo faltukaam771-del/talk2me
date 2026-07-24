@@ -20,22 +20,33 @@ themeToggle.addEventListener("click", () => {
   }
 });
 
-// Scroll to the latest message on load
 messagesArea.scrollTop = messagesArea.scrollHeight;
 
-// Join the room's socket namespace — re-run this on EVERY connect (including
-// automatic reconnects after a dropped connection), otherwise a reconnected
-// socket is never added back to the room server-side and stops receiving
-// live messages until a full page refresh.
 socket.on("connect", () => {
   socket.emit("join", { room_id: ROOM_ID, username: USERNAME });
+  // Mark any messages from the other person that are already on screen as read.
+  markVisibleAsRead();
 });
 
 function formatTime12h(timestampStr) {
   if (!timestampStr) return "";
   const [datePart, timePart] = timestampStr.split(" ");
-  const utcDate = new Date(`${datePart}T${timePart}Z`); // treat as UTC
-  return utcDate.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: "Asia/Kolkata" });
+  if (!datePart || !timePart) return timestampStr;
+  const utcDate = new Date(`${datePart}T${timePart}Z`); // stored value is UTC
+  if (isNaN(utcDate.getTime())) return timestampStr;
+  return utcDate.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  });
+}
+
+function tickMarkup(isOwn, status) {
+  if (!isOwn) return "";
+  const symbol = status === "sent" ? "✓" : "✓✓";
+  const readClass = status === "read" ? " read" : "";
+  return `<span class="msg-tick${readClass}">${symbol}</span>`;
 }
 
 function appendMessage(data) {
@@ -55,7 +66,7 @@ function appendMessage(data) {
     ? `<button class="delete-btn" data-msgid="${data.msg_id || ""}" title="Delete message">🗑</button>`
     : "";
 
-  inner += `<span class="msg-meta">${deleteBtn}<span class="msg-time">${timePart}</span>${isOwn ? '<span class="msg-tick">✓</span>' : ""}</span>`;
+  inner += `<span class="msg-meta">${deleteBtn}<span class="msg-time">${timePart}</span>${tickMarkup(isOwn, data.status || "sent")}</span>`;
 
   row.innerHTML = `<div class="bubble">${inner}</div>`;
   messagesArea.appendChild(row);
@@ -75,6 +86,7 @@ function sendMessage() {
   socket.emit("stop_typing", { room_id: ROOM_ID, username: USERNAME });
   clearTimeout(typingStopTimer);
   messageInput.value = "";
+  messageInput.focus(); // keeps the mobile keyboard open after tapping Send
 }
 
 sendBtn.addEventListener("click", sendMessage);
@@ -82,7 +94,7 @@ messageInput.addEventListener("keypress", (e) => {
   if (e.key === "Enter") sendMessage();
 });
 
-// ---------------- Typing indicator (both directions) ----------------
+// ---------------- Typing indicator ----------------
 
 let typingStopTimer;
 messageInput.addEventListener("input", () => {
@@ -102,14 +114,30 @@ messageInput.addEventListener("blur", () => {
 
 socket.on("receive_message", (data) => {
   appendMessage(data);
+  if (data.username !== USERNAME) {
+    // I received someone else's message -> tell them it was delivered.
+    socket.emit("mark_delivered", { msg_id: data.msg_id });
+    if (document.hasFocus()) {
+      socket.emit("mark_read", { msg_ids: [data.msg_id] });
+    }
+  }
 });
 
-socket.on("system_message", (data) => {
-  const row = document.createElement("div");
-  row.className = "system-message";
-  row.textContent = data.message;
-  messagesArea.appendChild(row);
-  messagesArea.scrollTop = messagesArea.scrollHeight;
+function markVisibleAsRead() {
+  const unread = [...messagesArea.querySelectorAll(".message-row.other")].map(r => r.dataset.msgid).filter(Boolean);
+  if (unread.length) socket.emit("mark_read", { msg_ids: unread });
+}
+
+window.addEventListener("focus", markVisibleAsRead);
+
+socket.on("status_update", (data) => {
+  const ids = data.msg_ids || [];
+  ids.forEach((id) => {
+    const tick = messagesArea.querySelector(`.message-row[data-msgid="${CSS.escape(id)}"] .msg-tick`);
+    if (!tick) return;
+    tick.textContent = "✓✓";
+    tick.classList.toggle("read", data.status === "read");
+  });
 });
 
 socket.on("show_typing", (data) => {
@@ -135,8 +163,22 @@ socket.on("presence_update", (data) => {
   }
 });
 
+// ---------------- Toast popup (replaces alert()) ----------------
+
+function showToast(message) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = message;
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add("show"));
+  setTimeout(() => {
+    el.classList.remove("show");
+    setTimeout(() => el.remove(), 300);
+  }, 3000);
+}
+
 socket.on("action_error", (data) => {
-  alert(data.message || "Kuch gadbad ho gayi.");
+  showToast(data.message || "Kuch gadbad ho gayi.");
 });
 
 socket.on("message_deleted", (data) => {
@@ -152,8 +194,5 @@ messagesArea.addEventListener("click", (e) => {
   const msgId = btn.dataset.msgid;
   if (!msgId) return;
   if (!confirm("Delete this message?")) return;
-
-  // The row itself is removed via the 'message_deleted' socket broadcast
-  // once the server confirms the delete; 'action_error' fires if it fails.
   socket.emit("delete_message", { room_id: ROOM_ID, msg_id: msgId });
 });
