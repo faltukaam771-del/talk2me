@@ -372,3 +372,31 @@ async function refreshChat() {
 }
 
 refreshBtn.addEventListener("click", refreshChat);
+
+// TEMPORARY DEBUG OVERLAY — remove once the keyboard-gap issue is fixed.
+const debugBox = document.createElement("div");
+debugBox.style.cssText = "position:fixed;top:4px;left:4px;z-index:9999;background:red;color:#fff;font-size:11px;padding:4px 6px;font-family:monospace;white-space:pre;";
+document.body.appendChild(debugBox);
+
+function updateDebugBox() {
+  if (!window.visualViewport) {
+    debugBox.textContent = "No visualViewport API";
+    return;
+  }
+  const vv = window.visualViewport;
+  debugBox.textContent =
+    `vv.height: ${vv.height}\n` +
+    `vv.offsetTop: ${vv.offsetTop}\n` +
+    `window.innerHeight: ${window.innerHeight}\n` +
+    `chatWrapper height: ${chatWrapper.offsetHeight}\n` +
+    `chatWrapper style.height: ${chatWrapper.style.height}\n` +
+    `chatWrapper transform: ${chatWrapper.style.transform}`;
+}
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", updateDebugBox);
+  window.visualViewport.addEventListener("scroll", updateDebugBox);
+}
+window.addEventListener("load", updateDebugBox);
+updateDebugBox();
+setInterval(updateDebugBox, 500); // catch changes even if events don't fire
