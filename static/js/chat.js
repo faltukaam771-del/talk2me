@@ -1,39 +1,13 @@
 const socket = io();
 
-// ---------------- Keep input bar pinned above the keyboard ----------------
-// On mobile browsers (Chrome/Brave), opening the keyboard shrinks the
-// "visual viewport" but NOT the layout viewport that `position: fixed`
-// elements are measured against — leaving a gap between the input bar
-// and the keyboard. This keeps the input bar glued to the actual
-// visible area by reading window.visualViewport directly.
-const inputArea = document.querySelector(".chat-input-area");
-
-// ---------------- Keep header + input bar pinned above the keyboard ----------------
-const chatWrapper = document.querySelector(".chat-wrapper");
-
-function syncInputAreaToViewport() {
-  if (!window.visualViewport || !inputArea || !chatWrapper) return;
-  const vv = window.visualViewport;
-
-  // Body-level scroll is now disabled (see CSS), so the whole chat-wrapper
-  // is re-sized to exactly the visible viewport height whenever the
-  // keyboard opens/closes — this keeps the header pinned at the top and
-  // the input bar right above the keyboard, with no gap and no drift.
-  chatWrapper.style.height = `${vv.height}px`;
-  window.scrollTo(0, 0); // undo any residual page-scroll some browsers still attempt
-  messagesArea.scrollTop = messagesArea.scrollHeight;
-}
-
-if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", syncInputAreaToViewport);
-  window.visualViewport.addEventListener("scroll", syncInputAreaToViewport);
-}
 const messagesArea = document.getElementById("messages");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
 const typingIndicator = document.getElementById("typingIndicator");
 const presenceStatus = document.getElementById("presenceStatus");
 const themeToggle = document.getElementById("themeToggle");
+const inputArea = document.querySelector(".chat-input-area");
+const chatWrapper = document.querySelector(".chat-wrapper");
 
 // ---------------- Dark mode ----------------
 
@@ -50,9 +24,36 @@ themeToggle.addEventListener("click", () => {
 
 messagesArea.scrollTop = messagesArea.scrollHeight;
 
+// ---------------- Keep header + input bar pinned above the keyboard ----------------
+// Body-level scroll is disabled in CSS (position: fixed; overflow: hidden),
+// so the whole chat-wrapper is re-sized to exactly the visible viewport
+// height whenever the keyboard opens/closes — this keeps the header pinned
+// at the top and the input bar right above the keyboard.
+
+function syncInputAreaToViewport() {
+  if (!window.visualViewport || !inputArea || !chatWrapper) return;
+  const vv = window.visualViewport;
+  chatWrapper.style.height = `${vv.height}px`;
+  window.scrollTo(0, 0);
+  messagesArea.scrollTop = messagesArea.scrollHeight;
+}
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", syncInputAreaToViewport);
+  window.visualViewport.addEventListener("scroll", syncInputAreaToViewport);
+}
+
+// Run once immediately on load too — otherwise on some mobile browsers the
+// first render relies purely on CSS (100dvh), which can misjudge the address
+// bar's collapsed/expanded state right after login and leave the input bar
+// pushed off-screen until something (like a screen lock/unlock) fires a
+// resize event.
+syncInputAreaToViewport();
+window.addEventListener("load", syncInputAreaToViewport);
+document.addEventListener("DOMContentLoaded", syncInputAreaToViewport);
+
 socket.on("connect", () => {
   socket.emit("join", { room_id: ROOM_ID, username: USERNAME });
-  // Mark any messages from the other person that are already on screen as read.
   markVisibleAsRead();
 });
 
@@ -122,40 +123,6 @@ messageInput.addEventListener("keypress", (e) => {
   if (e.key === "Enter") sendMessage();
 });
 
-// ---------------- Manual refresh (small icon inside the input box) ----------------
-
-const refreshBtn = document.getElementById("refreshBtn");
-
-async function refreshChat() {
-  refreshBtn.classList.add("spinning");
-  try {
-    const res = await fetch("/messages.json");
-    const data = await res.json();
-    if (data.error) {
-      showToast(data.error);
-      return;
-    }
-    messagesArea.innerHTML = "";
-    data.messages.forEach((msg) => {
-      appendMessage({
-        msg_id: msg.msg_id,
-        username: msg.username,
-        message: msg.message,
-        timestamp: msg.timestamp,
-        status: msg.status,
-      });
-    });
-    socket.emit("join", { room_id: ROOM_ID, username: USERNAME }); // rejoin in case the socket had silently dropped
-    showToast("Chat refreshed");
-  } catch {
-    showToast("Refresh failed. Check your connection.");
-  } finally {
-    setTimeout(() => refreshBtn.classList.remove("spinning"), 400);
-  }
-}
-
-refreshBtn.addEventListener("click", refreshChat);
-
 // ---------------- Typing indicator ----------------
 
 let typingStopTimer;
@@ -177,7 +144,6 @@ messageInput.addEventListener("blur", () => {
 socket.on("receive_message", (data) => {
   appendMessage(data);
   if (data.username !== USERNAME) {
-    // I received someone else's message -> tell them it was delivered.
     socket.emit("mark_delivered", { msg_id: data.msg_id });
     if (document.hasFocus()) {
       socket.emit("mark_read", { msg_ids: [data.msg_id] });
@@ -205,12 +171,15 @@ socket.on("status_update", (data) => {
 socket.on("show_typing", (data) => {
   if (data.username === OTHER_USERNAME) {
     typingIndicator.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span>`;
+    typingIndicator.classList.add("visible");
+    messagesArea.scrollTop = messagesArea.scrollHeight;
   }
 });
 
 socket.on("hide_typing", (data) => {
   if (data.username === OTHER_USERNAME) {
     typingIndicator.innerHTML = "";
+    typingIndicator.classList.remove("visible");
   }
 });
 
@@ -258,3 +227,43 @@ messagesArea.addEventListener("click", (e) => {
   if (!confirm("Delete this message?")) return;
   socket.emit("delete_message", { room_id: ROOM_ID, msg_id: msgId });
 });
+
+// ---------------- Manual refresh (icon inside the input box) ----------------
+
+const refreshBtn = document.getElementById("refreshBtn");
+
+async function refreshChat() {
+  // Tapping the refresh button moves browser focus onto it, which is what
+  // closes the mobile keyboard. Remember whether the message input was
+  // focused beforehand, so we can restore it after the refresh completes.
+  const inputWasFocused = document.activeElement === messageInput;
+
+  refreshBtn.classList.add("spinning");
+  try {
+    const res = await fetch("/messages.json");
+    const data = await res.json();
+    if (data.error) {
+      showToast(data.error);
+      return;
+    }
+    messagesArea.innerHTML = "";
+    data.messages.forEach((msg) => {
+      appendMessage({
+        msg_id: msg.msg_id,
+        username: msg.username,
+        message: msg.message,
+        timestamp: msg.timestamp,
+        status: msg.status,
+      });
+    });
+    socket.emit("join", { room_id: ROOM_ID, username: USERNAME }); // rejoin in case the socket had silently dropped
+    showToast("Chat refreshed");
+  } catch {
+    showToast("Refresh failed. Check your connection.");
+  } finally {
+    setTimeout(() => refreshBtn.classList.remove("spinning"), 400);
+    if (inputWasFocused) messageInput.focus(); // keeps the keyboard open
+  }
+}
+
+refreshBtn.addEventListener("click", refreshChat);
