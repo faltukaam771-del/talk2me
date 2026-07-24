@@ -46,7 +46,7 @@ html, body {
   overscroll-behavior: none;
 }
 
-body { background: var(--page-bg); transition: background 0.2s; }
+body { background: var(--input-area-bg); transition: background 0.2s; }
 
 button, input {
   -webkit-tap-highlight-color: transparent;
