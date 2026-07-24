@@ -26,7 +26,7 @@ from werkzeug.exceptions import HTTPException
 
 from utils import sheets_handler as db
 
-load_dotenv()
+load_dotenv()  # reads .env into os.environ — must happen before any os.environ.get() calls below
 
 # ---------------------------------------------------------------------------
 # CONFIG
@@ -39,11 +39,20 @@ ALLOWED_USERS = {
     "user": os.environ["USER_PASSWORD"],
 }
 ADMIN_USERNAME = "admin"
+GUEST_ROLE = "user"  # invite links log the guest in as this role
 IST_OFFSET = timedelta(hours=5, minutes=30)
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "change-this-secret-key")
-socketio = SocketIO(app, cors_allowed_origins="*")
+
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    max_decode_packets=200,  # default is 16 — buffered emits (typing/mark_read/
+                             # mark_delivered) sent all at once after a reconnect
+                             # were exceeding that, causing:
+                             # ValueError: Too many packets in payload
+)
 
 try:
     db.init_excel()
@@ -56,11 +65,13 @@ except Exception as e:
     )
 
 # ---------------------------------------------------------------------------
-# IN-MEMORY PRESENCE TRACKING
+# IN-MEMORY PRESENCE TRACKING (who's online right now)
 # ---------------------------------------------------------------------------
+# Resets whenever the app restarts — that's fine, presence is only ever
+# meant to reflect "right now" anyway.
 _presence_lock = threading.Lock()
-online_counts = {}
-sid_username = {}
+online_counts = {}  # username -> number of active socket connections (tabs/devices)
+sid_username = {}   # socket sid -> username, so disconnect knows who left
 
 
 def _online_usernames():
@@ -82,6 +93,7 @@ def format_time_12h(timestamp_str):
 
 
 def ensure_port_available(host, port):
+    """Fail early with a clear message if the development port is busy."""
     try:
         with socket.create_connection((host, port), timeout=0.5):
             pass
@@ -95,7 +107,15 @@ def ensure_port_available(host, port):
 
 
 # ---------------------------------------------------------------------------
-# ERROR HANDLING
+# IN-MEMORY ONE-TIME INVITE LINKS (admin-generated, single-use)
+# ---------------------------------------------------------------------------
+_invite_lock = threading.Lock()
+pending_invite_tokens = set()
+
+
+# ---------------------------------------------------------------------------
+# ERROR HANDLING — a Google Sheets hiccup should show a friendly page, not
+# Render/Flask's raw "Internal Server Error" screen.
 # ---------------------------------------------------------------------------
 @app.errorhandler(Exception)
 def handle_uncaught_error(e):
@@ -106,7 +126,7 @@ def handle_uncaught_error(e):
 
 
 # ---------------------------------------------------------------------------
-# ROUTES - JOIN THE ROOM
+# ROUTES - JOIN THE ROOM (password login)
 # ---------------------------------------------------------------------------
 @app.route("/", methods=["GET", "POST"])
 def join_page():
@@ -131,6 +151,39 @@ def join_page():
         return redirect(url_for("chat_page"))
 
     return render_template("join.html", room_name=ROOM_NAME)
+
+
+# ---------------------------------------------------------------------------
+# ROUTES - ONE-TIME INVITE LINK (no password, admin-generated, single-use)
+# ---------------------------------------------------------------------------
+@app.route("/admin/generate-link", methods=["POST"])
+def generate_invite_link():
+    if session.get("auth") != ADMIN_USERNAME:
+        return jsonify({"error": "Unauthorized"}), 403
+    token = secrets.token_urlsafe(16)
+    with _invite_lock:
+        pending_invite_tokens.add(token)
+    invite_url = url_for("join_via_link", token=token, _external=True)
+    return jsonify({"url": invite_url})
+
+
+@app.route("/invite/<token>")
+def join_via_link(token):
+    with _invite_lock:
+        valid = token in pending_invite_tokens
+        if valid:
+            pending_invite_tokens.discard(token)  # single-use: burn it immediately
+
+    if not valid:
+        return render_template(
+            "join.html",
+            room_name=ROOM_NAME,
+            error="This invite link is invalid or has already been used. Ask for a new one.",
+        )
+
+    session.clear()
+    session["auth"] = GUEST_ROLE
+    return redirect(url_for("chat_page"))
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +241,9 @@ def handle_join(data):
     sid_username[request.sid] = username
     with _presence_lock:
         online_counts[username] = online_counts.get(username, 0) + 1
+    # No "X joined the chat" announcement at all — presence is shown purely
+    # via the "Active now" status in the header (see presence_update below),
+    # so refreshing the page never spams the conversation with join messages.
     _broadcast_presence()
 
 
@@ -231,8 +287,7 @@ def handle_send_message(data):
 
 @socketio.on("mark_delivered")
 def handle_mark_delivered(data):
-    username = session.get("auth")
-    if not username:
+    if not session.get("auth"):
         return
     msg_id = data.get("msg_id")
     if not msg_id:
@@ -242,8 +297,7 @@ def handle_mark_delivered(data):
 
 @socketio.on("mark_read")
 def handle_mark_read(data):
-    username = session.get("auth")
-    if not username:
+    if not session.get("auth"):
         return
     msg_ids = data.get("msg_ids") or []
     if not msg_ids:
@@ -255,7 +309,7 @@ def handle_mark_read(data):
 def handle_delete_message(data):
     username = session.get("auth")
     if username != ADMIN_USERNAME:
-        return
+        return  # only admin can delete
     msg_id = data.get("msg_id")
     if not msg_id:
         return
@@ -269,6 +323,16 @@ def handle_delete_message(data):
         emit("message_deleted", {"msg_id": msg_id}, room=ROOM_ID)
     else:
         emit("action_error", {"message": "Message not found — it may already be deleted."})
+
+
+@socketio.on("admin_kick")
+def handle_admin_kick(data):
+    """Admin-only: force-logout whoever is currently in the guest/user role.
+    Every tab that guest has open is in the room, so this reaches all of them."""
+    username = session.get("auth")
+    if username != ADMIN_USERNAME:
+        return
+    emit("kicked", {"username": GUEST_ROLE}, room=ROOM_ID)
 
 
 @socketio.on("typing")
@@ -290,4 +354,9 @@ def handle_stop_typing(data):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     ensure_port_available("127.0.0.1", port)
+    # use_reloader=False: on Windows, Flask's debug auto-reloader spawns a
+    # second process, and both try to bind the same port with Socket.IO —
+    # causing "OSError: [WinError 10048]". Keeping debug=True still gives
+    # you full error tracebacks in the browser; it just won't auto-restart
+    # on file changes (stop the server with Ctrl+C and rerun manually instead).
     socketio.run(app, host="0.0.0.0", port=port, debug=True, use_reloader=False)
