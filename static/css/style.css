@@ -325,7 +325,28 @@ body { background: var(--page-bg); transition: background 0.2s; }
   margin-top: 4px;
 }
 .msg-time { font-size: 10.5px; color: var(--text-muted); }
-.msg-tick { font-size: 12px; color: #53bdeb; font-weight: 700; line-height: 1; }
+.msg-tick { font-size: 12px; color: #8696a0; font-weight: 700; line-height: 1; }
+.msg-tick.read { color: #53bdeb; }
+
+.toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #323232;
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .3s ease, transform .3s ease;
+  z-index: 999;
+  max-width: 85%;
+  text-align: center;
+}
+
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 .chat-input-area {
   display: flex;
