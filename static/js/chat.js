@@ -122,6 +122,40 @@ messageInput.addEventListener("keypress", (e) => {
   if (e.key === "Enter") sendMessage();
 });
 
+// ---------------- Manual refresh (small icon inside the input box) ----------------
+
+const refreshBtn = document.getElementById("refreshBtn");
+
+async function refreshChat() {
+  refreshBtn.classList.add("spinning");
+  try {
+    const res = await fetch("/messages.json");
+    const data = await res.json();
+    if (data.error) {
+      showToast(data.error);
+      return;
+    }
+    messagesArea.innerHTML = "";
+    data.messages.forEach((msg) => {
+      appendMessage({
+        msg_id: msg.msg_id,
+        username: msg.username,
+        message: msg.message,
+        timestamp: msg.timestamp,
+        status: msg.status,
+      });
+    });
+    socket.emit("join", { room_id: ROOM_ID, username: USERNAME }); // rejoin in case the socket had silently dropped
+    showToast("Chat refreshed");
+  } catch {
+    showToast("Refresh failed. Check your connection.");
+  } finally {
+    setTimeout(() => refreshBtn.classList.remove("spinning"), 400);
+  }
+}
+
+refreshBtn.addEventListener("click", refreshChat);
+
 // ---------------- Typing indicator ----------------
 
 let typingStopTimer;
