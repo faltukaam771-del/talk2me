@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Something went wrong</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/chat-logo.svg') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <script>
+    (function () {
+      var saved = localStorage.getItem("theme");
+      if (saved === "dark") document.documentElement.setAttribute("data-theme", "dark");
+    })();
+  </script>
+</head>
+<body class="auth-body">
+  <div class="auth-card" style="text-align:center;">
+    <div class="brand">
+      <div class="brand-icon" style="font-size:44px;">⚠️</div>
+      <h1>Something went wrong</h1>
+      <p class="subtitle">The server hit a small hiccup. A refresh usually fixes it.</p>
+    </div>
+    <a href="{{ url_for('join_page') }}" class="btn primary">Try again &rarr;</a>
+  </div>
+</body>
+</html>

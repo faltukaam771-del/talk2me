@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Join Chat Room</title>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icons/chat-logo.svg') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <script>
+    (function () {
+      var saved = localStorage.getItem("theme");
+      if (saved === "dark") document.documentElement.setAttribute("data-theme", "dark");
+    })();
+  </script>
+</head>
+<body class="auth-body">
+  <div class="auth-card">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 48 48" width="44" height="44" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="brandGrad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#25d366"/>
+              <stop offset="100%" stop-color="#075e54"/>
+            </linearGradient>
+          </defs>
+          <path d="M24 4C12.95 4 4 12.06 4 22c0 5.06 2.32 9.62 6.06 12.86L8 44l9.1-3.64C19.2 40.76 21.56 41 24 41c11.05 0 20-8.06 20-18S35.05 4 24 4z" fill="url(#brandGrad)"/>
+          <circle cx="15.5" cy="22" r="2.7" fill="#ffffff"/>
+          <circle cx="24" cy="22" r="2.7" fill="#ffffff"/>
+          <circle cx="32.5" cy="22" r="2.7" fill="#ffffff"/>
+        </svg>
+      </div>
+      <h1>{{ room_name if room_name else "Chat Room" }}</h1>
+      <p class="subtitle">Login as admin or user</p>
+    </div>
+
+    <form method="POST" class="auth-form">
+      {% if error %}<div class="error-box">{{ error }}</div>{% endif %}
+      <label>Your Name</label>
+      <input type="text" name="username" placeholder="admin or user" autocapitalize="none" autocomplete="username" required maxlength="30" autofocus />
+
+      <label>Room Password</label>
+      <input type="password" name="password" placeholder="Password" autocomplete="current-password" required />
+
+      <button type="submit" class="btn primary">Join Chat &rarr;</button>
+    </form>
+  </div>
+</body>
+</html>
