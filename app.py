@@ -83,11 +83,10 @@ def _broadcast_presence():
 
 
 def format_time_12h(timestamp_str):
-    """'2026-07-20 14:05:00' -> '2:05 PM' (falls back to the raw string on
-    any unexpected format instead of raising)."""
     try:
-        from datetime import datetime as _dt
+        from datetime import datetime as _dt, timezone, timedelta
         dt = _dt.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+        dt = dt.replace(tzinfo=timezone.utc) + timedelta(hours=5, minutes=30)
         return dt.strftime("%I:%M %p").lstrip("0")
     except (ValueError, TypeError):
         return timestamp_str
