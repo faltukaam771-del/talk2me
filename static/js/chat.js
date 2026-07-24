@@ -1,5 +1,27 @@
 const socket = io();
 
+// ---------------- Keep input bar pinned above the keyboard ----------------
+// On mobile browsers (Chrome/Brave), opening the keyboard shrinks the
+// "visual viewport" but NOT the layout viewport that `position: fixed`
+// elements are measured against — leaving a gap between the input bar
+// and the keyboard. This keeps the input bar glued to the actual
+// visible area by reading window.visualViewport directly.
+const inputArea = document.querySelector(".chat-input-area");
+
+function syncInputAreaToViewport() {
+  if (!window.visualViewport || !inputArea) return;
+  const vv = window.visualViewport;
+  const keyboardGap = window.innerHeight - vv.height - vv.offsetTop;
+  inputArea.style.transform = keyboardGap > 0 ? `translateY(-${keyboardGap}px)` : "translateY(0)";
+  messagesArea.style.paddingBottom = keyboardGap > 0 ? `${keyboardGap}px` : "";
+  messagesArea.scrollTop = messagesArea.scrollHeight;
+}
+
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", syncInputAreaToViewport);
+  window.visualViewport.addEventListener("scroll", syncInputAreaToViewport);
+}
+
 const messagesArea = document.getElementById("messages");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
