@@ -43,8 +43,8 @@ load_dotenv()  # reads .env into os.environ — must happen before any os.enviro
 ROOM_ID = "main"
 ROOM_NAME = os.environ.get("ROOM_NAME", "Our Chat")
 ALLOWED_USERS = {
-    "admin": os.environ.get("ADMIN_PASSWORD", "admin1921"),
-    "user": os.environ.get("USER_PASSWORD", "loveyou"),
+    "admin": os.environ["ADMIN_PASSWORD"],
+    "user": os.environ["USER_PASSWORD"],
 }
 ADMIN_USERNAME = "admin"
 
