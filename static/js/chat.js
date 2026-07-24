@@ -25,13 +25,24 @@ themeToggle.addEventListener("click", () => {
 messagesArea.scrollTop = messagesArea.scrollHeight;
 
 // ---------------- Keep header + input bar pinned above the keyboard ----------------
-
+// Some mobile browsers still try to scroll the page to keep the focused
+// input visible even though body scrolling is disabled — this changes
+// visualViewport.offsetTop. Fighting that scroll with scrollTo(0,0) (the
+// old approach) caused the jitter you saw (position flickering up/down)
+// and made the header appear to scroll away, because the header wasn't
+// compensating for that offset at all. Instead of fighting the browser,
+// we now shift the whole wrapper by exactly that offset so it always
+// lines up with whatever is actually visible — header included.
+let vvRaf = null;
 function syncInputAreaToViewport() {
   if (!window.visualViewport || !inputArea || !chatWrapper) return;
-  const vv = window.visualViewport;
-  chatWrapper.style.height = `${vv.height}px`;
-  window.scrollTo(0, 0);
-  messagesArea.scrollTop = messagesArea.scrollHeight;
+  if (vvRaf) cancelAnimationFrame(vvRaf);
+  vvRaf = requestAnimationFrame(() => {
+    const vv = window.visualViewport;
+    chatWrapper.style.height = `${vv.height}px`;
+    chatWrapper.style.transform = vv.offsetTop ? `translateY(${vv.offsetTop}px)` : "";
+    messagesArea.scrollTop = messagesArea.scrollHeight;
+  });
 }
 
 if (window.visualViewport) {
@@ -203,20 +214,69 @@ socket.on("action_error", (data) => {
   showToast(data.message || "Kuch gadbad ho gayi.");
 });
 
-// ---------------- Telegram-style delete animation ----------------
-// Instead of yanking the row out instantly, shrink + fade + slide it
-// sideways, then remove it from the DOM only once the animation finishes.
+// ---------------- Particle-burst delete animation ----------------
+// The bubble implodes (shrinks + fades) while a burst of small particles
+// scatters outward from it, then the row's height collapses so the
+// conversation reflows smoothly — all removed from the DOM only once the
+// animation actually finishes.
+
+function spawnParticles(row, bubbleEl) {
+  const bubbleRect = bubbleEl.getBoundingClientRect();
+  const wrapperRect = chatWrapper.getBoundingClientRect();
+
+  const container = document.createElement("div");
+  container.className = "particle-container";
+  container.style.left = `${bubbleRect.left - wrapperRect.left}px`;
+  container.style.top = `${bubbleRect.top - wrapperRect.top}px`;
+  container.style.width = `${bubbleRect.width}px`;
+  container.style.height = `${bubbleRect.height}px`;
+
+  const isDark = document.documentElement.getAttribute("data-theme") === "dark";
+  const particleColor = row.classList.contains("own")
+    ? (isDark ? "#00a884" : "#25d366")
+    : (isDark ? "#8696a0" : "#93a5ad");
+
+  const count = 16;
+  for (let i = 0; i < count; i++) {
+    const p = document.createElement("span");
+    p.className = "msg-particle";
+    const x = Math.random() * bubbleRect.width;
+    const y = Math.random() * bubbleRect.height;
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 26 + Math.random() * 46;
+    const dx = Math.cos(angle) * distance;
+    const dy = Math.sin(angle) * distance - 14; // slight upward drift, like dust
+    const rot = `${Math.random() * 300 - 150}deg`;
+    const size = 4 + Math.random() * 4;
+
+    p.style.left = `${x}px`;
+    p.style.top = `${y}px`;
+    p.style.width = `${size}px`;
+    p.style.height = `${size}px`;
+    p.style.setProperty("--dx", `${dx}px`);
+    p.style.setProperty("--dy", `${dy}px`);
+    p.style.setProperty("--rot", rot);
+    p.style.background = particleColor;
+    p.style.animationDelay = `${Math.random() * 70}ms`;
+    container.appendChild(p);
+  }
+
+  chatWrapper.appendChild(container);
+  setTimeout(() => container.remove(), 750);
+}
+
 function removeMessageRow(msgId) {
   const row = messagesArea.querySelector(`.message-row[data-msgid="${CSS.escape(msgId)}"]`);
   if (!row) return;
-  if (row.classList.contains("deleting")) return;
+  if (row.classList.contains("deleting")) return; // already animating out
+
+  const bubble = row.querySelector(".bubble");
+  if (bubble) spawnParticles(row, bubble);
 
   row.classList.add("deleting");
-  row.style.maxHeight = `${row.scrollHeight}px`;
+  row.style.maxHeight = `${row.scrollHeight}px`; // lock current height so the collapse transition has something to animate from
 
-  // Force layout so the browser registers the starting height before we
-  // change it, otherwise the transition can get skipped.
-  void row.offsetHeight;
+  void row.offsetHeight; // force layout so the transition doesn't get skipped
 
   requestAnimationFrame(() => {
     row.classList.add("deleting-collapse");
@@ -228,7 +288,7 @@ function removeMessageRow(msgId) {
     }
   });
 
-  setTimeout(() => { if (row.isConnected) row.remove(); }, 500);
+  setTimeout(() => { if (row.isConnected) row.remove(); }, 550);
 }
 
 socket.on("message_deleted", (data) => {
