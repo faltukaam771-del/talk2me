@@ -171,8 +171,9 @@ button, input {
   flex-direction: column;
   background: var(--wa-bg);
   box-shadow: 0 0 30px rgba(0,0,0,0.1);
-  /* Base fallback texture; JS (syncInputAreaToViewport) sets an exact
-     pixel height on top of this once the visual viewport is known. */
+  position: relative; /* anchors .particle-container's absolute positioning */
+  /* JS (syncInputAreaToViewport) sets an exact pixel height + transform on
+     top of this once the visual viewport is known, to stay keyboard-safe. */
 }
 
 @supports (height: 100dvh) {
@@ -392,28 +393,46 @@ button, input {
 .message-row.own { justify-content: flex-end; }
 .message-row.other { justify-content: flex-start; }
 
-/* Telegram-style delete: bubble shrinks sideways + fades + collapses its
-   own row height, instead of just vanishing instantly. */
+/* Delete animation: the bubble implodes (shrinks + fades in place) while
+   a burst of particles (see .particle-container below) scatters outward
+   from it at the same moment, then the row's height collapses so the
+   conversation reflows smoothly. */
 .message-row.deleting {
   overflow: hidden;
-  transition: max-height 0.28s ease, margin-bottom 0.28s ease, opacity 0.22s ease;
+  transition: max-height 0.32s ease 0.12s, margin-bottom 0.32s ease 0.12s, opacity 0.2s ease 0.12s;
 }
 .message-row.deleting .bubble {
-  transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.22s ease;
-  transform-origin: right center;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.28s ease;
 }
-.message-row.deleting.other .bubble { transform-origin: left center; }
 .message-row.deleting.deleting-collapse {
   max-height: 0 !important;
   margin-bottom: 0;
   opacity: 0;
 }
 .message-row.deleting.deleting-collapse .bubble {
-  transform: scale(0.75) translateX(30px);
+  transform: scale(0.35);
   opacity: 0;
 }
-.message-row.deleting.other.deleting-collapse .bubble {
-  transform: scale(0.75) translateX(-30px);
+
+/* Particle burst overlay — absolutely positioned over the bubble at the
+   moment of deletion, made of small squares flying outward and fading. */
+.particle-container {
+  position: absolute;
+  pointer-events: none;
+  z-index: 50;
+}
+.msg-particle {
+  position: absolute;
+  border-radius: 2px;
+  opacity: 1;
+  pointer-events: none;
+  animation: particleBurst 0.6s ease-out forwards;
+}
+@keyframes particleBurst {
+  to {
+    transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.2);
+    opacity: 0;
+  }
 }
 
 .fade-in { animation: fadeInUp 0.22s ease-out; }
