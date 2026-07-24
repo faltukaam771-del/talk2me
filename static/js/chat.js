@@ -8,12 +8,19 @@ const socket = io();
 // visible area by reading window.visualViewport directly.
 const inputArea = document.querySelector(".chat-input-area");
 
+// ---------------- Keep header + input bar pinned above the keyboard ----------------
+const chatWrapper = document.querySelector(".chat-wrapper");
+
 function syncInputAreaToViewport() {
-  if (!window.visualViewport || !inputArea) return;
+  if (!window.visualViewport || !inputArea || !chatWrapper) return;
   const vv = window.visualViewport;
-  const keyboardGap = window.innerHeight - vv.height - vv.offsetTop;
-  inputArea.style.transform = keyboardGap > 0 ? `translateY(-${keyboardGap}px)` : "translateY(0)";
-  messagesArea.style.paddingBottom = keyboardGap > 0 ? `${keyboardGap}px` : "";
+
+  // Body-level scroll is now disabled (see CSS), so the whole chat-wrapper
+  // is re-sized to exactly the visible viewport height whenever the
+  // keyboard opens/closes — this keeps the header pinned at the top and
+  // the input bar right above the keyboard, with no gap and no drift.
+  chatWrapper.style.height = `${vv.height}px`;
+  window.scrollTo(0, 0); // undo any residual page-scroll some browsers still attempt
   messagesArea.scrollTop = messagesArea.scrollHeight;
 }
 
@@ -21,7 +28,6 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener("resize", syncInputAreaToViewport);
   window.visualViewport.addEventListener("scroll", syncInputAreaToViewport);
 }
-
 const messagesArea = document.getElementById("messages");
 const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
