@@ -209,15 +209,14 @@ socket.on("action_error", (data) => {
 function removeMessageRow(msgId) {
   const row = messagesArea.querySelector(`.message-row[data-msgid="${CSS.escape(msgId)}"]`);
   if (!row) return;
-  if (row.classList.contains("deleting")) return; // already animating out
+  if (row.classList.contains("deleting")) return;
 
   row.classList.add("deleting");
-  row.style.maxHeight = `${row.scrollHeight}px`; // lock current height so the collapse transition has something to animate from
+  row.style.maxHeight = `${row.scrollHeight}px`;
 
   // Force layout so the browser registers the starting height before we
   // change it, otherwise the transition can get skipped.
-  // eslint-disable-next-line no-unused-expressions
-  row.offsetHeight;
+  void row.offsetHeight;
 
   requestAnimationFrame(() => {
     row.classList.add("deleting-collapse");
@@ -229,8 +228,6 @@ function removeMessageRow(msgId) {
     }
   });
 
-  // Safety net in case a transitionend event never fires (e.g. row had
-  // zero height already) — remove it after the animation's total duration anyway.
   setTimeout(() => { if (row.isConnected) row.remove(); }, 500);
 }
 
@@ -256,10 +253,9 @@ const refreshBtn = document.getElementById("refreshBtn");
 // Prevent the refresh button from ever taking focus away from the message
 // input in the first place — this is what actually keeps the keyboard
 // open, rather than trying to refocus afterwards (which fails, because by
-// the time the fetch() resolves, the browser's "user gesture" window has
+// the time fetch() resolves, the browser's "user gesture" window has
 // expired and .focus() alone can no longer reopen the keyboard).
 refreshBtn.addEventListener("mousedown", (e) => e.preventDefault());
-refreshBtn.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
 
 async function refreshChat() {
   refreshBtn.classList.add("spinning");
@@ -267,8 +263,6 @@ async function refreshChat() {
     const res = await fetch("/messages.json", { headers: { "Accept": "application/json" } });
 
     if (!res.ok) {
-      // Route missing, session expired, or a server error — show the real
-      // status instead of a generic "check your connection" message.
       showToast(`Refresh failed (server said: ${res.status}). Try logging in again if this repeats.`);
       return;
     }
@@ -299,7 +293,6 @@ async function refreshChat() {
     socket.emit("join", { room_id: ROOM_ID, username: USERNAME });
     showToast("Chat refreshed");
   } catch (err) {
-    // A genuine network-level failure (offline, DNS, CORS) lands here.
     showToast("Refresh failed. Check your connection.");
   } finally {
     setTimeout(() => refreshBtn.classList.remove("spinning"), 400);
