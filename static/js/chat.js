@@ -25,10 +25,6 @@ themeToggle.addEventListener("click", () => {
 messagesArea.scrollTop = messagesArea.scrollHeight;
 
 // ---------------- Keep header + input bar pinned above the keyboard ----------------
-// Body-level scroll is disabled in CSS (position: fixed; overflow: hidden),
-// so the whole chat-wrapper is re-sized to exactly the visible viewport
-// height whenever the keyboard opens/closes — this keeps the header pinned
-// at the top and the input bar right above the keyboard.
 
 function syncInputAreaToViewport() {
   if (!window.visualViewport || !inputArea || !chatWrapper) return;
@@ -43,11 +39,6 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener("scroll", syncInputAreaToViewport);
 }
 
-// Run once immediately on load too — otherwise on some mobile browsers the
-// first render relies purely on CSS (100dvh), which can misjudge the address
-// bar's collapsed/expanded state right after login and leave the input bar
-// pushed off-screen until something (like a screen lock/unlock) fires a
-// resize event.
 syncInputAreaToViewport();
 window.addEventListener("load", syncInputAreaToViewport);
 document.addEventListener("DOMContentLoaded", syncInputAreaToViewport);
@@ -61,7 +52,7 @@ function formatTime12h(timestampStr) {
   if (!timestampStr) return "";
   const [datePart, timePart] = timestampStr.split(" ");
   if (!datePart || !timePart) return timestampStr;
-  const utcDate = new Date(`${datePart}T${timePart}Z`); // stored value is UTC
+  const utcDate = new Date(`${datePart}T${timePart}Z`);
   if (isNaN(utcDate.getTime())) return timestampStr;
   return utcDate.toLocaleTimeString("en-IN", {
     hour: "2-digit",
@@ -115,7 +106,7 @@ function sendMessage() {
   socket.emit("stop_typing", { room_id: ROOM_ID, username: USERNAME });
   clearTimeout(typingStopTimer);
   messageInput.value = "";
-  messageInput.focus(); // keeps the mobile keyboard open after tapping Send
+  messageInput.focus();
 }
 
 sendBtn.addEventListener("click", sendMessage);
@@ -212,9 +203,39 @@ socket.on("action_error", (data) => {
   showToast(data.message || "Kuch gadbad ho gayi.");
 });
 
+// ---------------- Telegram-style delete animation ----------------
+// Instead of yanking the row out instantly, shrink + fade + slide it
+// sideways, then remove it from the DOM only once the animation finishes.
+function removeMessageRow(msgId) {
+  const row = messagesArea.querySelector(`.message-row[data-msgid="${CSS.escape(msgId)}"]`);
+  if (!row) return;
+  if (row.classList.contains("deleting")) return; // already animating out
+
+  row.classList.add("deleting");
+  row.style.maxHeight = `${row.scrollHeight}px`; // lock current height so the collapse transition has something to animate from
+
+  // Force layout so the browser registers the starting height before we
+  // change it, otherwise the transition can get skipped.
+  // eslint-disable-next-line no-unused-expressions
+  row.offsetHeight;
+
+  requestAnimationFrame(() => {
+    row.classList.add("deleting-collapse");
+  });
+
+  row.addEventListener("transitionend", (e) => {
+    if (e.propertyName === "max-height" || e.propertyName === "margin-bottom") {
+      row.remove();
+    }
+  });
+
+  // Safety net in case a transitionend event never fires (e.g. row had
+  // zero height already) — remove it after the animation's total duration anyway.
+  setTimeout(() => { if (row.isConnected) row.remove(); }, 500);
+}
+
 socket.on("message_deleted", (data) => {
-  const row = messagesArea.querySelector(`.message-row[data-msgid="${CSS.escape(data.msg_id)}"]`);
-  if (row) row.remove();
+  removeMessageRow(data.msg_id);
 });
 
 // ---------------- Admin: delete message ----------------
@@ -232,22 +253,41 @@ messagesArea.addEventListener("click", (e) => {
 
 const refreshBtn = document.getElementById("refreshBtn");
 
-async function refreshChat() {
-  // Tapping the refresh button moves browser focus onto it, which is what
-  // closes the mobile keyboard. Remember whether the message input was
-  // focused beforehand, so we can restore it after the refresh completes.
-  const inputWasFocused = document.activeElement === messageInput;
+// Prevent the refresh button from ever taking focus away from the message
+// input in the first place — this is what actually keeps the keyboard
+// open, rather than trying to refocus afterwards (which fails, because by
+// the time the fetch() resolves, the browser's "user gesture" window has
+// expired and .focus() alone can no longer reopen the keyboard).
+refreshBtn.addEventListener("mousedown", (e) => e.preventDefault());
+refreshBtn.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
 
+async function refreshChat() {
   refreshBtn.classList.add("spinning");
   try {
-    const res = await fetch("/messages.json");
-    const data = await res.json();
+    const res = await fetch("/messages.json", { headers: { "Accept": "application/json" } });
+
+    if (!res.ok) {
+      // Route missing, session expired, or a server error — show the real
+      // status instead of a generic "check your connection" message.
+      showToast(`Refresh failed (server said: ${res.status}). Try logging in again if this repeats.`);
+      return;
+    }
+
+    let data;
+    try {
+      data = await res.json();
+    } catch {
+      showToast("Refresh failed: server didn't return valid data.");
+      return;
+    }
+
     if (data.error) {
       showToast(data.error);
       return;
     }
+
     messagesArea.innerHTML = "";
-    data.messages.forEach((msg) => {
+    (data.messages || []).forEach((msg) => {
       appendMessage({
         msg_id: msg.msg_id,
         username: msg.username,
@@ -256,13 +296,13 @@ async function refreshChat() {
         status: msg.status,
       });
     });
-    socket.emit("join", { room_id: ROOM_ID, username: USERNAME }); // rejoin in case the socket had silently dropped
+    socket.emit("join", { room_id: ROOM_ID, username: USERNAME });
     showToast("Chat refreshed");
-  } catch {
+  } catch (err) {
+    // A genuine network-level failure (offline, DNS, CORS) lands here.
     showToast("Refresh failed. Check your connection.");
   } finally {
     setTimeout(() => refreshBtn.classList.remove("spinning"), 400);
-    if (inputWasFocused) messageInput.focus(); // keeps the keyboard open
   }
 }
 
