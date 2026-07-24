@@ -228,6 +228,26 @@ def logout():
     session.clear()
     return redirect(url_for("join_page"))
 
+@app.route("/messages.json")
+def messages_json():
+    """Lightweight refresh endpoint — used by the refresh icon in the input
+    box so the chat can be reloaded without a full page refresh (keeps the
+    keyboard open on mobile)."""
+    username = session.get("auth")
+    if not username:
+        return jsonify({"error": "Unauthorized"}), 401
+    try:
+        history = db.get_messages(ROOM_ID)
+    except Exception:
+        app.logger.exception("Failed to refresh chat history")
+        return jsonify({"error": "Could not load messages. Try again."}), 500
+
+    for msg in history:
+        msg["display_time"] = format_time_12h(msg.get("timestamp", ""))
+        msg["status"] = "delivered"
+
+    return jsonify({"messages": history, "username": username, "is_admin": (username == ADMIN_USERNAME)})
+
 
 # ---------------------------------------------------------------------------
 # SOCKET.IO EVENTS - LIVE MESSAGING
