@@ -298,6 +298,7 @@ button, input {
 
 .status-line { display: flex; align-items: center; gap: 8px; font-size: 12px; opacity: 0.9; min-height: 14px; }
 .presence-status { opacity: 0.85; }
+.device-count { opacity: 0.75; font-size: 11.5px; }
 .presence-status.is-online::before {
   content: "";
   display: inline-block;
