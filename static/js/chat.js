@@ -437,7 +437,7 @@ function removeMessageRow(msgId) {
 
 socket.on("message_deleted", (data) => {
   removeMessageRow(data.msg_id);
-  showToast("Message deleted", "delete");
+  if (IS_ADMIN) showToast("Message deleted", "delete");
 });
 
 // ---------------- Admin: delete message ----------------
