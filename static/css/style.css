@@ -339,10 +339,8 @@ button, input {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  background: var(--wa-bubble-other);
+  background: transparent;
   padding: 6px 12px;
-  border-radius: 14px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 .typing-dots span {
   width: 6px;
