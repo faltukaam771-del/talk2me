@@ -6,6 +6,7 @@ const sendBtn = document.getElementById("sendBtn");
 const typingIndicator = document.getElementById("typingIndicator");
 const presenceStatus = document.getElementById("presenceStatus");
 const deviceCount = document.getElementById("deviceCount");
+let lastOtherCount = 0;
 const themeToggle = document.getElementById("themeToggle");
 const chatWrapper = document.querySelector(".chat-wrapper");
 const header = document.querySelector(".chat-header");
@@ -216,8 +217,7 @@ socket.on("presence_update", (data) => {
   const myCount = counts[USERNAME] || 0;
   const otherCount = counts[OTHER_USERNAME] || 0;
   deviceCount.textContent = `· You ${myCount} · ${OTHER_USERNAME} ${otherCount}`;
-
-  if (kickBtn) kickBtn.style.display = otherCount > 0 ? "flex" : "none";
+  lastOtherCount = otherCount;
 });
 
 // ---------------- Custom confirm popup (replaces window.confirm()) ----------------
@@ -250,12 +250,62 @@ function showConfirm(message, onConfirm) {
   });
 }
 
+// ---------------- Action sheet (multiple choices in one popup) ----------------
+
+function showActionSheet(title, actions) {
+  const overlay = document.createElement("div");
+  overlay.className = "confirm-overlay";
+  const buttonsHtml = actions
+    .map((a, i) => `<button type="button" class="sheet-btn${a.danger ? " sheet-danger" : ""}" data-idx="${i}"></button>`)
+    .join("");
+  overlay.innerHTML = `
+    <div class="confirm-card sheet-card">
+      <p class="confirm-message"></p>
+      <div class="sheet-actions">${buttonsHtml}</div>
+      <button type="button" class="confirm-btn confirm-cancel sheet-cancel">Cancel</button>
+    </div>`;
+  overlay.querySelector(".confirm-message").textContent = title;
+  overlay.querySelectorAll(".sheet-btn").forEach((btn, i) => {
+    btn.textContent = actions[i].label;
+  });
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("show"));
+
+  function close() {
+    overlay.classList.remove("show");
+    setTimeout(() => overlay.remove(), 200);
+  }
+
+  overlay.querySelectorAll(".sheet-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      close();
+      actions[idx].onClick();
+    });
+  });
+  overlay.querySelector(".sheet-cancel").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+}
+
+// ---------------- Admin: session management ----------------
+
 const kickBtn = document.getElementById("kickBtn");
 if (kickBtn) {
   kickBtn.addEventListener("click", () => {
-    showConfirm(`Log ${OTHER_USERNAME} out of the chat now?`, () => {
-      socket.emit("admin_kick", {});
+    const actions = [];
+    if (lastOtherCount > 0) {
+      actions.push({
+        label: `Log out ${OTHER_USERNAME} (all devices)`,
+        danger: true,
+        onClick: () => socket.emit("admin_kick", { target: "user" }),
+      });
+    }
+    actions.push({
+      label: "Log out admin — other sessions only (keep this one)",
+      danger: false,
+      onClick: () => socket.emit("admin_kick", { target: "admin_others" }),
     });
+    showActionSheet("Who do you want to log out?", actions);
   });
 }
 
