@@ -315,24 +315,17 @@ button, input {
   z-index: 10;
   display: flex;
   flex-direction: column;
-  background: var(--input-area-bg); /* avoids a flash of page background while it's being lifted */
+  background: transparent; /* typing-indicator strip shows through to the chat background instead of a solid block */
   transition: transform 0.12s ease-out;
   will-change: transform;
 }
 
 .typing-indicator-bar {
   flex-shrink: 0;
-  min-height: 0;
-  max-height: 0;
-  overflow: hidden;
-  padding: 0 16px;
+  padding: 4px 16px;
   display: flex;
   align-items: center;
-  transition: max-height 0.18s ease, padding 0.18s ease;
-}
-.typing-indicator-bar.visible {
-  max-height: 28px;
-  padding: 4px 16px;
+  min-height: 0;
 }
 
 .typing-dots {
