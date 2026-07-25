@@ -164,20 +164,12 @@ button, input {
 .chat-body { background: var(--wa-bg); }
 
 .chat-wrapper {
+  position: fixed;
+  inset: 0;
   max-width: 760px;
   margin: 0 auto;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
   background: var(--wa-bg);
   box-shadow: 0 0 30px rgba(0,0,0,0.1);
-  position: relative; /* anchors .particle-container's absolute positioning */
-  /* JS (syncInputAreaToViewport) sets an exact pixel height + transform on
-     top of this once the visual viewport is known, to stay keyboard-safe. */
-}
-
-@supports (height: 100dvh) {
-  .chat-wrapper { height: 100dvh; }
 }
 
 /* Subtle background texture so dark mode isn't a flat black slab —
@@ -204,11 +196,13 @@ button, input {
   justify-content: space-between;
   background: linear-gradient(120deg, var(--wa-green) 0%, var(--wa-green-light) 100%);
   box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-  z-index: 5;
-  position: sticky;
+  position: fixed;
   top: 0;
-  flex-shrink: 0; /* never let flex layout compress the header when the
-                     keyboard shrinks available space */
+  left: 0;
+  right: 0;
+  max-width: 760px;
+  margin: 0 auto;
+  z-index: 10;
 }
 .header-info { display: flex; align-items: center; gap: 12px; }
 .avatar {
@@ -306,9 +300,26 @@ button, input {
   vertical-align: middle;
 }
 
-/* Typing indicator now lives right above the input bar, near where the
-   other person's next message bubble will actually appear — not in the
-   header where it used to sit far from the action. */
+/* Typing indicator + input bar are grouped in .bottom-bar (fixed to the
+   viewport, not the flex layout) so JS can lift the whole group above the
+   on-screen keyboard by exactly the keyboard's height — this is the part
+   that was previously unreliable when the whole wrapper was being resized
+   instead. */
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 760px;
+  margin: 0 auto;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  background: var(--input-area-bg); /* avoids a flash of page background while it's being lifted */
+  transition: transform 0.12s ease-out;
+  will-change: transform;
+}
+
 .typing-indicator-bar {
   flex-shrink: 0;
   min-height: 0;
@@ -376,14 +387,20 @@ button, input {
 .delete-btn:hover { opacity: 1; }
 
 .messages-area {
-  flex: 1;
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   overflow-y: auto;
   padding: 18px 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  transition: padding-bottom 0.1s ease-out;
   -webkit-overflow-scrolling: touch;
+  /* padding-top / padding-bottom get overridden by JS (syncLayout) to
+     exactly match the header and bottom-bar's real heights, so content
+     never sits underneath them. */
 }
 .messages-area::-webkit-scrollbar { width: 6px; }
 .messages-area::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 6px; }
@@ -487,11 +504,9 @@ button, input {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 16px;
+  padding: 12px 16px max(12px, env(safe-area-inset-bottom));
   background: var(--input-area-bg);
   border-top: 1px solid var(--border-color);
-  transition: transform 0.1s ease-out;
-  will-change: transform;
   flex-shrink: 0;
 }
 .chat-input-area input[type="text"] {
