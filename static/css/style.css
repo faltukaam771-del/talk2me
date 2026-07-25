@@ -172,19 +172,28 @@ button, input {
   box-shadow: 0 0 30px rgba(0,0,0,0.1);
 }
 
-/* Subtle background texture so dark mode isn't a flat black slab —
-   faint dot-grid + soft glow, matching the light-mode radial hint. */
+/* Chat background texture — subtle repeating doodle-style pattern plus soft
+   glow accents, distinct per theme so the chat area doesn't feel flat. */
 .messages-area {
+  background-color: var(--wa-bg);
   background-image:
-    radial-gradient(circle at 20% 20%, rgba(0,0,0,0.015) 0%, transparent 50%),
-    radial-gradient(circle at 80% 60%, rgba(0,0,0,0.015) 0%, transparent 50%);
+    radial-gradient(circle at 15% 12%, rgba(7,94,84,0.05) 0%, transparent 40%),
+    radial-gradient(circle at 85% 78%, rgba(18,140,126,0.05) 0%, transparent 40%),
+    radial-gradient(rgba(7,94,84,0.05) 1.4px, transparent 1.4px),
+    radial-gradient(rgba(7,94,84,0.035) 1px, transparent 1px);
+  background-size: auto, auto, 34px 34px, 18px 18px;
+  background-position: 0 0, 0 0, 0 0, 9px 9px;
 }
 [data-theme="dark"] .messages-area {
+  background-color: var(--wa-bg);
   background-image:
-    radial-gradient(circle at 15% 10%, rgba(37,211,102,0.05) 0%, transparent 45%),
-    radial-gradient(circle at 85% 70%, rgba(37,211,102,0.04) 0%, transparent 45%),
-    radial-gradient(rgba(255,255,255,0.035) 1px, transparent 1px);
-  background-size: auto, auto, 18px 18px;
+    radial-gradient(circle at 12% 8%, rgba(37,211,102,0.07) 0%, transparent 42%),
+    radial-gradient(circle at 88% 22%, rgba(83,211,138,0.05) 0%, transparent 38%),
+    radial-gradient(circle at 30% 85%, rgba(37,211,102,0.05) 0%, transparent 40%),
+    radial-gradient(rgba(255,255,255,0.045) 1.4px, transparent 1.4px),
+    radial-gradient(rgba(37,211,102,0.05) 1px, transparent 1px);
+  background-size: auto, auto, auto, 34px 34px, 20px 20px;
+  background-position: 0 0, 0 0, 0 0, 0 0, 10px 10px;
 }
 
 .chat-header {
@@ -474,22 +483,39 @@ button, input {
 
 .toast {
   position: fixed;
-  bottom: 80px;
+  bottom: calc(80px + env(safe-area-inset-bottom));
   left: 50%;
-  transform: translateX(-50%) translateY(20px);
-  background: #323232;
-  color: #fff;
-  padding: 10px 18px;
-  border-radius: 8px;
-  font-size: 14px;
+  transform: translateX(-50%) translateY(24px) scale(0.96);
+  background: var(--card-bg);
+  color: var(--text-dark);
+  padding: 11px 18px 11px 14px;
+  border-radius: 12px;
+  font-size: 13.5px;
+  font-weight: 500;
   opacity: 0;
   pointer-events: none;
-  transition: opacity .3s ease, transform .3s ease;
+  transition: opacity .28s cubic-bezier(0.34, 1.56, 0.64, 1), transform .28s cubic-bezier(0.34, 1.56, 0.64, 1);
   z-index: 999;
   max-width: 85%;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.22), 0 2px 6px rgba(0,0,0,0.12);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--wa-green-light);
 }
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+.toast-icon { flex-shrink: 0; display: flex; opacity: 0.9; }
+.toast-text { line-height: 1.35; }
+
+.toast-error { border-left-color: #e74c3c; }
+.toast-error .toast-icon { color: #e74c3c; }
+.toast-warn { border-left-color: #f0a020; }
+.toast-warn .toast-icon { color: #f0a020; }
+.toast-delete { border-left-color: #8696a0; }
+.toast-delete .toast-icon { color: #8696a0; }
+.toast-info { border-left-color: #25d366; }
+.toast-info .toast-icon { color: #25d366; }
 
 .chat-input-area {
   display: flex;
