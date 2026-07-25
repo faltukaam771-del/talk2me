@@ -62,14 +62,13 @@
       </div>
     </div>
 
-    {% if history_error %}
-    <div class="banner-warning">
-      Couldn't load older chat history (connection issue). You can still chat live — try refreshing in a moment.
-    </div>
-    {% endif %}
-
     <!-- Messages -->
     <div id="messages" class="messages-area">
+      {% if history_error %}
+      <div class="banner-warning">
+        Couldn't load older chat history (connection issue). You can still chat live — try refreshing in a moment.
+      </div>
+      {% endif %}
       {% for msg in history %}
         <div class="message-row {{ 'own' if msg.username == username else 'other' }}" data-msgid="{{ msg.msg_id }}">
           <div class="bubble">
@@ -85,15 +84,15 @@
       {% endfor %}
     </div>
 
-    <!-- Typing indicator — sits right above the input bar, near where the
-         other person's next bubble will actually land, not in the header. -->
-    <div id="typingIndicator" class="typing-indicator-bar"></div>
-
-    <!-- Input -->
-    <div class="chat-input-area">
-      <button id="refreshBtn" class="refresh-btn" type="button" title="Refresh chat">⟳</button>
-      <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off" />
-      <button id="sendBtn" title="Send">➤</button>
+    <!-- Typing indicator + input, grouped together so JS can lift the
+         whole group above the on-screen keyboard as one unit. -->
+    <div class="bottom-bar">
+      <div id="typingIndicator" class="typing-indicator-bar"></div>
+      <div class="chat-input-area">
+        <button id="refreshBtn" class="refresh-btn" type="button" title="Refresh chat">⟳</button>
+        <input type="text" id="messageInput" placeholder="Type a message..." autocomplete="off" />
+        <button id="sendBtn" title="Send">➤</button>
+      </div>
     </div>
   </div>
 
