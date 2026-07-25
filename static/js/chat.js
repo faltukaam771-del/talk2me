@@ -215,17 +215,47 @@ socket.on("presence_update", (data) => {
   // Device/tab count — shown to both admin and user, e.g. "You: 2 devices · user: 1 device"
   const myCount = counts[USERNAME] || 0;
   const otherCount = counts[OTHER_USERNAME] || 0;
-  const plural = (n) => (n === 1 ? "device" : "devices");
-  deviceCount.textContent = `· You: ${myCount} ${plural(myCount)} · ${OTHER_USERNAME}: ${otherCount} ${plural(otherCount)}`;
+  deviceCount.textContent = `· You ${myCount} · ${OTHER_USERNAME} ${otherCount}`;
+
+  if (kickBtn) kickBtn.style.display = otherCount > 0 ? "flex" : "none";
 });
 
-// ---------------- Admin: force-logout the other user ----------------
+// ---------------- Custom confirm popup (replaces window.confirm()) ----------------
+
+function showConfirm(message, onConfirm) {
+  const overlay = document.createElement("div");
+  overlay.className = "confirm-overlay";
+  overlay.innerHTML = `
+    <div class="confirm-card">
+      <p class="confirm-message"></p>
+      <div class="confirm-actions">
+        <button type="button" class="confirm-btn confirm-cancel">Cancel</button>
+        <button type="button" class="confirm-btn confirm-ok">Confirm</button>
+      </div>
+    </div>`;
+  overlay.querySelector(".confirm-message").textContent = message;
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => overlay.classList.add("show"));
+
+  function close() {
+    overlay.classList.remove("show");
+    setTimeout(() => overlay.remove(), 200);
+  }
+
+  overlay.querySelector(".confirm-cancel").addEventListener("click", close);
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) close(); });
+  overlay.querySelector(".confirm-ok").addEventListener("click", () => {
+    close();
+    onConfirm();
+  });
+}
 
 const kickBtn = document.getElementById("kickBtn");
 if (kickBtn) {
   kickBtn.addEventListener("click", () => {
-    if (!confirm(`Log ${OTHER_USERNAME} out of the chat now?`)) return;
-    socket.emit("admin_kick", {});
+    showConfirm(`Log ${OTHER_USERNAME} out of the chat now?`, () => {
+      socket.emit("admin_kick", {});
+    });
   });
 }
 
@@ -349,8 +379,9 @@ messagesArea.addEventListener("click", (e) => {
   if (!btn) return;
   const msgId = btn.dataset.msgid;
   if (!msgId) return;
-  if (!confirm("Delete this message?")) return;
-  socket.emit("delete_message", { room_id: ROOM_ID, msg_id: msgId });
+  showConfirm("Delete this message?", () => {
+    socket.emit("delete_message", { room_id: ROOM_ID, msg_id: msgId });
+  });
 });
 
 // ---------------- Manual refresh (icon inside the input box) ----------------
