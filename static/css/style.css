@@ -517,6 +517,10 @@ button, input {
 .toast-delete .toast-icon { color: #8696a0; }
 .toast-info { border-left-color: #25d366; }
 .toast-info .toast-icon { color: #25d366; }
+[data-theme="dark"] .toast {
+  border-color: rgba(255,255,255,0.08);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.35), inset 0 0 0 1px rgba(255,255,255,0.02);
+}
 
 /* Custom confirm popup — replaces the browser's native confirm() dialog */
 .confirm-overlay {
@@ -545,6 +549,11 @@ button, input {
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 .confirm-overlay.show .confirm-card { transform: scale(1) translateY(0); }
+[data-theme="dark"] .confirm-overlay { background: rgba(0,0,0,0.6); }
+[data-theme="dark"] .confirm-card {
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(255,255,255,0.02);
+}
 .confirm-message { font-size: 14.5px; line-height: 1.5; margin-bottom: 16px; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .confirm-btn {
@@ -581,6 +590,11 @@ button, input {
 .sheet-btn:hover { background: rgba(0,0,0,0.06); }
 [data-theme="dark"] .sheet-btn:hover { background: rgba(255,255,255,0.08); }
 .sheet-btn.sheet-danger { color: #e74c3c; }
+[data-theme="dark"] .sheet-btn {
+  background: #2a3942;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+[data-theme="dark"] .sheet-btn.sheet-danger { color: #ff6b5b; }
 .confirm-card.sheet-card .sheet-cancel { width: 100%; text-align: center; }
 
 .chat-input-area {
@@ -606,7 +620,7 @@ button, input {
 }
 .chat-input-area input[type="text"]::placeholder { color: var(--text-muted); }
 .chat-input-area input[type="text"]:focus { border-color: var(--wa-green-light); }
-.chat-input-area button {
+.chat-input-area button:not(.refresh-btn) {
   width: 44px; height: 44px;
   border-radius: 50%;
   border: none;
@@ -619,8 +633,8 @@ button, input {
   box-shadow: 0 2px 6px rgba(7,94,84,0.3);
   transition: background 0.15s, transform 0.1s;
 }
-.chat-input-area button:hover { background: var(--wa-green-light); }
-.chat-input-area button:active { transform: scale(0.94); }
+.chat-input-area button:not(.refresh-btn):hover { background: var(--wa-green-light); }
+.chat-input-area button:not(.refresh-btn):active { transform: scale(0.94); }
 
 .refresh-btn {
   width: 38px;
@@ -721,7 +735,7 @@ button, input {
     font-size: 16px;
   }
 
-  .chat-input-area button {
+  .chat-input-area button:not(.refresh-btn) {
     width: 40px;
     height: 40px;
     font-size: 17px;
@@ -750,7 +764,7 @@ button, input {
     gap: 6px;
   }
 
-  .chat-input-area button {
+  .chat-input-area button:not(.refresh-btn) {
     width: 38px;
     height: 38px;
   }
