@@ -79,7 +79,12 @@ def _online_usernames():
 
 
 def _broadcast_presence():
-    socketio.emit("presence_update", {"online_users": _online_usernames()}, room=ROOM_ID)
+    counts = {u: c for u, c in online_counts.items() if c > 0}
+    socketio.emit(
+        "presence_update",
+        {"online_users": sorted(counts.keys()), "counts": counts},
+        room=ROOM_ID,
+    )
 
 
 def format_time_12h(timestamp_str):
