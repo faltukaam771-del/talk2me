@@ -5,6 +5,7 @@ const messageInput = document.getElementById("messageInput");
 const sendBtn = document.getElementById("sendBtn");
 const typingIndicator = document.getElementById("typingIndicator");
 const presenceStatus = document.getElementById("presenceStatus");
+const deviceCount = document.getElementById("deviceCount");
 const themeToggle = document.getElementById("themeToggle");
 const chatWrapper = document.querySelector(".chat-wrapper");
 const header = document.querySelector(".chat-header");
@@ -201,12 +202,37 @@ socket.on("hide_typing", (data) => {
 
 socket.on("presence_update", (data) => {
   const online = data.online_users || [];
+  const counts = data.counts || {};
+
   if (online.includes(OTHER_USERNAME)) {
     presenceStatus.textContent = "Active now";
     presenceStatus.classList.add("is-online");
   } else {
     presenceStatus.textContent = "Offline";
     presenceStatus.classList.remove("is-online");
+  }
+
+  // Device/tab count — shown to both admin and user, e.g. "You: 2 devices · user: 1 device"
+  const myCount = counts[USERNAME] || 0;
+  const otherCount = counts[OTHER_USERNAME] || 0;
+  const plural = (n) => (n === 1 ? "device" : "devices");
+  deviceCount.textContent = `· You: ${myCount} ${plural(myCount)} · ${OTHER_USERNAME}: ${otherCount} ${plural(otherCount)}`;
+});
+
+// ---------------- Admin: force-logout the other user ----------------
+
+const kickBtn = document.getElementById("kickBtn");
+if (kickBtn) {
+  kickBtn.addEventListener("click", () => {
+    if (!confirm(`Log ${OTHER_USERNAME} out of the chat now?`)) return;
+    socket.emit("admin_kick", {});
+  });
+}
+
+socket.on("kicked", (data) => {
+  if (data.username === USERNAME) {
+    showToast("You were logged out by the admin.", "warn");
+    setTimeout(() => { window.location.href = "/logout"; }, 1100);
   }
 });
 
