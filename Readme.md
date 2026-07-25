@@ -2,8 +2,6 @@
 
 A private, WhatsApp-style, text-only chat web app for exactly two people — `admin` and `user` — built with Flask + Socket.IO, backed by Google Sheets for storage, and deployed on Render.
 
-Live: https://talk2you.onrender.com
-
 ---
 
 ## Tech stack
