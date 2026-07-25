@@ -262,8 +262,26 @@ if (kickBtn) {
 socket.on("kicked", (data) => {
   if (data.username === USERNAME) {
     showToast("You were logged out by the admin.", "warn");
+    socket.disconnect(); // let the server know immediately, instead of waiting for the navigation to eventually close the connection
     setTimeout(() => { window.location.href = "/logout"; }, 1100);
   }
+});
+
+const logoutLink = document.getElementById("logoutLink");
+if (logoutLink) {
+  logoutLink.addEventListener("click", (e) => {
+    e.preventDefault();
+    socket.disconnect(); // same reasoning — don't wait on the navigation to close the connection on its own
+    window.location.href = logoutLink.href;
+  });
+}
+
+// General safety net: however the person actually leaves (back button,
+// closing the tab, typing a new URL, our own logout/kick redirects above),
+// make sure the server finds out right away instead of waiting for the
+// Socket.IO heartbeat timeout to notice a dead connection.
+window.addEventListener("pagehide", () => {
+  socket.disconnect();
 });
 
 // ---------------- System-message popup (replaces plain alert()) ----------------
