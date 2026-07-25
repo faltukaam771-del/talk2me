@@ -6,8 +6,9 @@ const sendBtn = document.getElementById("sendBtn");
 const typingIndicator = document.getElementById("typingIndicator");
 const presenceStatus = document.getElementById("presenceStatus");
 const themeToggle = document.getElementById("themeToggle");
-const inputArea = document.querySelector(".chat-input-area");
 const chatWrapper = document.querySelector(".chat-wrapper");
+const header = document.querySelector(".chat-header");
+const bottomBar = document.querySelector(".bottom-bar");
 
 // ---------------- Dark mode ----------------
 
@@ -24,47 +25,46 @@ themeToggle.addEventListener("click", () => {
 
 messagesArea.scrollTop = messagesArea.scrollHeight;
 
-// ---------------- Keep header + input bar pinned above the keyboard ----------------
-// Some mobile browsers still try to scroll the page to keep the focused
-// input visible even though body scrolling is disabled — this changes
-// visualViewport.offsetTop. Fighting that scroll with scrollTo(0,0) (the
-// old approach) caused the jitter you saw (position flickering up/down)
-// and made the header appear to scroll away, because the header wasn't
-// compensating for that offset at all. Instead of fighting the browser,
-// we now shift the whole wrapper by exactly that offset so it always
-// lines up with whatever is actually visible — header included.
-let vvRaf = null;
-let vvSettleTimer = null;
-function syncInputAreaToViewport() {
-  if (!window.visualViewport || !inputArea || !chatWrapper) return;
-  if (vvRaf) cancelAnimationFrame(vvRaf);
-  vvRaf = requestAnimationFrame(() => {
-    const vv = window.visualViewport;
-    chatWrapper.style.height = `${vv.height}px`;
-    chatWrapper.style.transform = vv.offsetTop ? `translateY(${vv.offsetTop}px)` : "";
-    messagesArea.scrollTop = messagesArea.scrollHeight;
-  });
+// ---------------- Keyboard-safe layout ----------------
+// Header is truly `position: fixed; top: 0` — the keyboard never affects
+// the top of the screen, so it never needs to move.
+//
+// The typing-indicator + input bar are grouped into one `.bottom-bar`,
+// also `position: fixed`, and JS lifts that single group up by exactly
+// the keyboard's height whenever it opens — instead of the old approach
+// of resizing the entire chat-wrapper, which was unreliable because it
+// depended on precisely tracking a moving visualViewport height in sync
+// with the whole page. Lifting just the bottom bar by a computed offset
+// is the same technique production chat apps (Telegram Web, Slack, etc.)
+// use, and needs far fewer moving parts to get right.
+//
+// messages-area fills the full screen (position: absolute, inset 0) and
+// gets padding-top/padding-bottom set to the header/bottom-bar's real
+// measured heights, so messages never sit hidden underneath either one.
+
+function syncLayoutPadding() {
+  if (!header || !bottomBar) return;
+  messagesArea.style.paddingTop = `${header.offsetHeight}px`;
+  messagesArea.style.paddingBottom = `${bottomBar.offsetHeight}px`;
 }
 
-function scheduleViewportSync() {
-  syncInputAreaToViewport(); // apply immediately, keeps it responsive/non-jittery
-  // Chrome/Android can fire several resize events while the keyboard is still
-  // animating open, and an intermediate (wrong, too-small) height can end up
-  // being the last one we saw before things settle. This corrective pass
-  // re-measures once the animation has actually finished, so any transient
-  // bad value gets overwritten with the real final size.
-  clearTimeout(vvSettleTimer);
-  vvSettleTimer = setTimeout(syncInputAreaToViewport, 150);
+function syncKeyboardOffset() {
+  if (!window.visualViewport || !bottomBar) return;
+  const vv = window.visualViewport;
+  const keyboardHeight = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+  bottomBar.style.transform = keyboardHeight > 0 ? `translateY(-${keyboardHeight}px)` : "";
+  syncLayoutPadding();
+  messagesArea.scrollTop = messagesArea.scrollHeight;
 }
 
 if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", scheduleViewportSync);
-  window.visualViewport.addEventListener("scroll", scheduleViewportSync);
+  window.visualViewport.addEventListener("resize", syncKeyboardOffset);
+  window.visualViewport.addEventListener("scroll", syncKeyboardOffset);
 }
-
-syncInputAreaToViewport();
-window.addEventListener("load", syncInputAreaToViewport);
-document.addEventListener("DOMContentLoaded", syncInputAreaToViewport);
+window.addEventListener("load", syncKeyboardOffset);
+document.addEventListener("DOMContentLoaded", syncKeyboardOffset);
+syncLayoutPadding();
+syncKeyboardOffset();
 
 socket.on("connect", () => {
   socket.emit("join", { room_id: ROOM_ID, username: USERNAME });
@@ -186,6 +186,7 @@ socket.on("show_typing", (data) => {
   if (data.username === OTHER_USERNAME) {
     typingIndicator.innerHTML = `<span class="typing-dots"><span></span><span></span><span></span></span>`;
     typingIndicator.classList.add("visible");
+    requestAnimationFrame(syncLayoutPadding);
     messagesArea.scrollTop = messagesArea.scrollHeight;
   }
 });
@@ -194,6 +195,7 @@ socket.on("hide_typing", (data) => {
   if (data.username === OTHER_USERNAME) {
     typingIndicator.innerHTML = "";
     typingIndicator.classList.remove("visible");
+    requestAnimationFrame(syncLayoutPadding);
   }
 });
 
@@ -227,10 +229,6 @@ socket.on("action_error", (data) => {
 });
 
 // ---------------- Particle-burst delete animation ----------------
-// The bubble implodes (shrinks + fades) while a burst of small particles
-// scatters outward from it, then the row's height collapses so the
-// conversation reflows smoothly — all removed from the DOM only once the
-// animation actually finishes.
 
 function spawnParticles(row, bubbleEl) {
   const bubbleRect = bubbleEl.getBoundingClientRect();
@@ -257,7 +255,7 @@ function spawnParticles(row, bubbleEl) {
     const angle = Math.random() * Math.PI * 2;
     const distance = 26 + Math.random() * 46;
     const dx = Math.cos(angle) * distance;
-    const dy = Math.sin(angle) * distance - 14; // slight upward drift, like dust
+    const dy = Math.sin(angle) * distance - 14;
     const rot = `${Math.random() * 300 - 150}deg`;
     const size = 4 + Math.random() * 4;
 
@@ -280,15 +278,15 @@ function spawnParticles(row, bubbleEl) {
 function removeMessageRow(msgId) {
   const row = messagesArea.querySelector(`.message-row[data-msgid="${CSS.escape(msgId)}"]`);
   if (!row) return;
-  if (row.classList.contains("deleting")) return; // already animating out
+  if (row.classList.contains("deleting")) return;
 
   const bubble = row.querySelector(".bubble");
   if (bubble) spawnParticles(row, bubble);
 
   row.classList.add("deleting");
-  row.style.maxHeight = `${row.scrollHeight}px`; // lock current height so the collapse transition has something to animate from
+  row.style.maxHeight = `${row.scrollHeight}px`;
 
-  void row.offsetHeight; // force layout so the transition doesn't get skipped
+  void row.offsetHeight;
 
   requestAnimationFrame(() => {
     row.classList.add("deleting-collapse");
@@ -322,11 +320,6 @@ messagesArea.addEventListener("click", (e) => {
 
 const refreshBtn = document.getElementById("refreshBtn");
 
-// Prevent the refresh button from ever taking focus away from the message
-// input in the first place — this is what actually keeps the keyboard
-// open, rather than trying to refocus afterwards (which fails, because by
-// the time fetch() resolves, the browser's "user gesture" window has
-// expired and .focus() alone can no longer reopen the keyboard).
 refreshBtn.addEventListener("mousedown", (e) => e.preventDefault());
 
 async function refreshChat() {
@@ -372,31 +365,3 @@ async function refreshChat() {
 }
 
 refreshBtn.addEventListener("click", refreshChat);
-
-// TEMPORARY DEBUG OVERLAY — remove once the keyboard-gap issue is fixed.
-const debugBox = document.createElement("div");
-debugBox.style.cssText = "position:fixed;top:4px;left:4px;z-index:9999;background:red;color:#fff;font-size:11px;padding:4px 6px;font-family:monospace;white-space:pre;";
-document.body.appendChild(debugBox);
-
-function updateDebugBox() {
-  if (!window.visualViewport) {
-    debugBox.textContent = "No visualViewport API";
-    return;
-  }
-  const vv = window.visualViewport;
-  debugBox.textContent =
-    `vv.height: ${vv.height}\n` +
-    `vv.offsetTop: ${vv.offsetTop}\n` +
-    `window.innerHeight: ${window.innerHeight}\n` +
-    `chatWrapper height: ${chatWrapper.offsetHeight}\n` +
-    `chatWrapper style.height: ${chatWrapper.style.height}\n` +
-    `chatWrapper transform: ${chatWrapper.style.transform}`;
-}
-
-if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", updateDebugBox);
-  window.visualViewport.addEventListener("scroll", updateDebugBox);
-}
-window.addEventListener("load", updateDebugBox);
-updateDebugBox();
-setInterval(updateDebugBox, 500); // catch changes even if events don't fire
