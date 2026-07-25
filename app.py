@@ -353,12 +353,27 @@ def handle_delete_message(data):
 
 @socketio.on("admin_kick")
 def handle_admin_kick(data):
-    """Admin-only: force-logout whoever is currently in the guest/user role.
-    Every tab that guest has open is in the room, so this reaches all of them."""
+    """Admin-only. Two modes:
+      - target == "user": force-logout every session currently logged in
+        as the ordinary "user" role (all of that person's devices/tabs).
+      - target == "admin_others": force-logout every OTHER admin session
+        (other devices/tabs the admin is logged in on), but never the tab
+        that issued this request — that one stays logged in."""
     username = session.get("auth")
     if username != ADMIN_USERNAME:
         return
-    emit("kicked", {"username": GUEST_ROLE}, room=ROOM_ID)
+
+    target = data.get("target")
+    requesting_sid = request.sid
+
+    if target == "user":
+        for sid, uname in list(sid_username.items()):
+            if uname == GUEST_ROLE:
+                emit("kicked", {"username": GUEST_ROLE}, room=sid)
+    elif target == "admin_others":
+        for sid, uname in list(sid_username.items()):
+            if uname == ADMIN_USERNAME and sid != requesting_sid:
+                emit("kicked", {"username": ADMIN_USERNAME}, room=sid)
 
 
 @socketio.on("typing")
