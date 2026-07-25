@@ -562,6 +562,27 @@ button, input {
 .confirm-ok { background: #e74c3c; color: #fff; }
 .confirm-ok:hover { background: #c0392b; }
 
+/* Action sheet — same overlay/card as confirm, but with a stacked list of
+   choice buttons instead of a single confirm/cancel pair. */
+.sheet-card { max-width: 340px; }
+.sheet-actions { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.sheet-btn {
+  border: none;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  background: var(--input-area-bg);
+  color: var(--text-dark);
+  transition: background 0.15s;
+}
+.sheet-btn:hover { background: rgba(0,0,0,0.06); }
+[data-theme="dark"] .sheet-btn:hover { background: rgba(255,255,255,0.08); }
+.sheet-btn.sheet-danger { color: #e74c3c; }
+.confirm-card.sheet-card .sheet-cancel { width: 100%; text-align: center; }
+
 .chat-input-area {
   display: flex;
   align-items: center;
