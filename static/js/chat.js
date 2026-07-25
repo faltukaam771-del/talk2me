@@ -44,7 +44,7 @@ messagesArea.scrollTop = messagesArea.scrollHeight;
 
 function syncLayoutPadding() {
   if (!header || !bottomBar) return;
-  messagesArea.style.paddingTop = `${header.offsetHeight}px`;
+  messagesArea.style.paddingTop = `${header.offsetHeight + 14}px`; // +14px gap before the first message
   messagesArea.style.paddingBottom = `${bottomBar.offsetHeight + 12}px`; // +12px breathing room above the input bar
 }
 
@@ -210,12 +210,22 @@ socket.on("presence_update", (data) => {
   }
 });
 
-// ---------------- Toast popup (replaces alert()) ----------------
+// ---------------- System-message popup (replaces plain alert()) ----------------
+// type: "info" (default, e.g. "Chat refreshed"), "error" (e.g. save/delete
+// failed), "warn" (e.g. kicked out) — each gets its own icon + accent color.
 
-function showToast(message) {
+const TOAST_ICONS = {
+  info: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="8" x2="12" y2="8.01"></line><line x1="12" y1="12" x2="12" y2="16"></line></svg>`,
+  error: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12" y2="16.01"></line></svg>`,
+  warn: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12" y2="17.01"></line></svg>`,
+  delete: `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path></svg>`,
+};
+
+function showToast(message, type = "info") {
   const el = document.createElement("div");
-  el.className = "toast";
-  el.textContent = message;
+  el.className = `toast toast-${type}`;
+  el.innerHTML = `<span class="toast-icon">${TOAST_ICONS[type] || TOAST_ICONS.info}</span><span class="toast-text"></span>`;
+  el.querySelector(".toast-text").textContent = message;
   document.body.appendChild(el);
   requestAnimationFrame(() => el.classList.add("show"));
   setTimeout(() => {
@@ -225,7 +235,7 @@ function showToast(message) {
 }
 
 socket.on("action_error", (data) => {
-  showToast(data.message || "Kuch gadbad ho gayi.");
+  showToast(data.message || "Kuch gadbad ho gayi.", "error");
 });
 
 // ---------------- Particle-burst delete animation ----------------
@@ -303,6 +313,7 @@ function removeMessageRow(msgId) {
 
 socket.on("message_deleted", (data) => {
   removeMessageRow(data.msg_id);
+  showToast("Message deleted", "delete");
 });
 
 // ---------------- Admin: delete message ----------------
@@ -328,7 +339,7 @@ async function refreshChat() {
     const res = await fetch("/messages.json", { headers: { "Accept": "application/json" } });
 
     if (!res.ok) {
-      showToast(`Refresh failed (server said: ${res.status}). Try logging in again if this repeats.`);
+      showToast(`Refresh failed (server said: ${res.status}). Try logging in again if this repeats.`, "error");
       return;
     }
 
@@ -336,12 +347,12 @@ async function refreshChat() {
     try {
       data = await res.json();
     } catch {
-      showToast("Refresh failed: server didn't return valid data.");
+      showToast("Refresh failed: server didn't return valid data.", "error");
       return;
     }
 
     if (data.error) {
-      showToast(data.error);
+      showToast(data.error, "error");
       return;
     }
 
@@ -356,9 +367,9 @@ async function refreshChat() {
       });
     });
     socket.emit("join", { room_id: ROOM_ID, username: USERNAME });
-    showToast("Chat refreshed");
+    showToast("Chat refreshed", "info");
   } catch (err) {
-    showToast("Refresh failed. Check your connection.");
+    showToast("Refresh failed. Check your connection.", "error");
   } finally {
     setTimeout(() => refreshBtn.classList.remove("spinning"), 400);
   }
