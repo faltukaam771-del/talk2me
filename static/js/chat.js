@@ -45,7 +45,7 @@ messagesArea.scrollTop = messagesArea.scrollHeight;
 function syncLayoutPadding() {
   if (!header || !bottomBar) return;
   messagesArea.style.paddingTop = `${header.offsetHeight}px`;
-  messagesArea.style.paddingBottom = `${bottomBar.offsetHeight}px`;
+  messagesArea.style.paddingBottom = `${bottomBar.offsetHeight + 12}px`; // +12px breathing room above the input bar
 }
 
 function syncKeyboardOffset() {
